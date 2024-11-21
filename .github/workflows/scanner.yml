@@ -25,15 +25,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Log in to the Container registry
+      - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN }}  # or
 
       - name: Pull scanner image
-        run: docker pull ${{ env.SCANNER_IMAGE }}
+        run: docker pull ghcr.io/caliptrasecurity/agent:main
 
       - name: Run Dependency Scanner
         id: scanner
