@@ -1,0 +1,61 @@
+name: Caliptra Security Check  # Changed to be more visible as a check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+  schedule:
+    - cron: "0 0 * * *"
+
+env:
+  REGISTRY: ghcr.io
+  SCANNER_IMAGE: ghcr.io/caliptrasecurity/agent:main
+
+jobs:
+  caliptra-security:  # Changed job name to be more specific
+    name: Caliptra Security  # This is what will appear in the GitHub UI
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      pull-requests: write
+      packages: read
+    # Make it a required check
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull scanner image
+        run: docker pull ${{ env.SCANNER_IMAGE }}
+
+      - name: Run Security Scanner
+        id: scanner
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/code \
+            -e SCAN_PATH=${{ github.workspace }} \
+            -e INPUT_FAIL_ON_SEVERITY=true \
+            -e GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} \
+            -e GITHUB_REF=${{ github.ref }} \
+            -e GITHUB_SHA=${{ github.event.pull_request.head.sha }} \
+            -e GITHUB_REPOSITORY=${{ github.repository }} \
+            -e GITHUB_EVENT_NAME=${{ github.event_name }} \
+            -e GITHUB_PR_NUMBER=${{ github.event.pull_request.number }} \
+            -e GITHUB_BASE_REF=${{ github.base_ref }} \
+            -e GITHUB_HEAD_REF=${{ github.head_ref }} \
+            -e GITHUB_OUTPUT=$GITHUB_OUTPUT \
+            ${{ env.SCANNER_IMAGE }}
