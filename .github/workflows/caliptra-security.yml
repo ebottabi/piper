@@ -55,8 +55,9 @@ jobs:
         id: scanner
         run: |
           docker run --rm \
-            -v ${{ github.workspace }}:/code \
-            -e SCAN_PATH=${{ github.workspace }} \
+            -v $(pwd):/scan \
+            -w /scan \
+            -e SCAN_PATH=/scan \
             -e INPUT_FAIL_ON_SEVERITY=true \
             -e GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} \
             -e GITHUB_REF=${{ github.ref }} \
