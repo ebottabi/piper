@@ -31,70 +31,30 @@ jobs:
       cancel-in-progress: true
 
     steps:
-      # Step 1: Checkout the repository
-      - name: Checkout Repository
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha }}
 
-      # Step 2: Log in to the GitHub Container Registry
-      - name: Log in to GitHub Container Registry
+      - name: Log in to the Container registry
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Step 3: Pull the scanner Docker image
-      - name: Pull Scanner Image
+      - name: Pull scanner image
         run: docker pull ${{ env.SCANNER_IMAGE }}
 
-      # Step 4: Run the security scanner
-      - name: Run Security Scanner
+      - name: Run Dependency Scanner
         id: scanner
         run: |
           docker run --rm \
-            -v $(pwd):/scan \
-            -w /scan \
-            -e SCAN_PATH=/scan \
+            -v ${{ github.workspace }}:/code \
+            -e SCAN_PATH=${{ github.workspace }} \
             -e INPUT_FAIL_ON_SEVERITY=true \
             -e GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} \
-            -e GITHUB_REF=${{ github.ref }} \
-            -e GITHUB_SHA=${{ github.event.pull_request.head.sha }} \
+            -e GITHUB_REF_NAME=${{ github.ref_name }} \
+            -e GITHUB_SHA=${{ github.sha }} \
             -e GITHUB_REPOSITORY=${{ github.repository }} \
             -e GITHUB_EVENT_NAME=${{ github.event_name }} \
-            -e GITHUB_PR_NUMBER=${{ github.event.pull_request.number }} \
-            -e GITHUB_BASE_REF=${{ github.base_ref }} \
-            -e GITHUB_HEAD_REF=${{ github.head_ref }} \
             -e GITHUB_OUTPUT=$GITHUB_OUTPUT \
             ${{ env.SCANNER_IMAGE }}
-
-      # Step 5: Create a status check result
-      - name: Create Status Check
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const { context, getOctokit } = require('@actions/github');
-            const octokit = getOctokit(process.env.GITHUB_TOKEN);
-
-            const checkRun = await octokit.rest.checks.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              name: 'Caliptra Security',
-              head_sha: context.payload.pull_request.head.sha,
-              status: 'completed',
-              conclusion: 'success', // Change to 'failure' if needed based on scan results
-              output: {
-                title: 'Caliptra Security Check',
-                summary: 'Security scan completed successfully. No vulnerabilities detected.',
-              },
-            });
-            console.log(checkRun);
-
-      # Step 6: Handle scan failures (if needed)
-      - name: Fail Workflow on Scanner Failure
-        if: steps.scanner.outcome == 'failure'
-        run: |
-          echo "Security scan failed. Please review vulnerabilities."
-          exit 1
