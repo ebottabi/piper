@@ -1,34 +1,25 @@
-name: Caliptra Security Check
+name: Caliptra Security Scan
 
 on:
   push:
-    branches: [main]  # For merges and direct commits to main
+    branches: [main]
   pull_request:
-    branches: [main]  # For pull requests
-# on:
-#   pull_request:
-#     types: [opened, synchronize, reopened]
-#     branches: [main]
+    branches: [main]
   schedule:
-    - cron: "0 0 * * *" # Optional: Runs the workflow daily as a scheduled task
+    - cron: "0 0 * * *" # Daily scan
 
 env:
   REGISTRY: ghcr.io
   SCANNER_IMAGE: ghcr.io/caliptrasecurity/agent:main
 
 jobs:
-  caliptra-security:
-    name: Caliptra Security
+  scan:
     runs-on: ubuntu-latest
     permissions:
-      contents: read          # Required to read repository contents
-      security-events: write  # Allows creating security events
-      pull-requests: write    # Allows updating PR statuses
-      packages: read          # Pull container images from GitHub Packages
-
-    concurrency:
-      group: ${{ github.workflow }}-${{ github.ref }}
-      cancel-in-progress: true
+      contents: read
+      security-events: write
+      pull-requests: write
+      packages: read
 
     steps:
       - name: Checkout repository
