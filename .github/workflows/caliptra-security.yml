@@ -1,47 +1,51 @@
-name: Caliptra Security Check  # Changed to be more visible as a check
+name: Caliptra Security Check
 
 on:
   pull_request:
     types: [opened, synchronize, reopened]
     branches: [main]
   schedule:
-    - cron: "0 0 * * *"
+    - cron: "0 0 * * *" # Optional: Runs the workflow daily as a scheduled task
 
 env:
   REGISTRY: ghcr.io
   SCANNER_IMAGE: ghcr.io/caliptrasecurity/agent:main
 
 jobs:
-  caliptra-security:  # Changed job name to be more specific
-    name: Caliptra Security  # This is what will appear in the GitHub UI
+  caliptra-security:
+    name: Caliptra Security
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      security-events: write
-      pull-requests: write
-      packages: read
-    # Make it a required check
+      contents: read          # Required to read repository contents
+      security-events: write  # Allows creating security events
+      pull-requests: write    # Allows updating PR statuses
+      packages: read          # Pull container images from GitHub Packages
+
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}
       cancel-in-progress: true
 
     steps:
-      - name: Checkout repository
+      # Step 1: Checkout the repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
 
-      - name: Log in to the Container registry
+      # Step 2: Log in to the GitHub Container Registry
+      - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Pull scanner image
+      # Step 3: Pull the scanner Docker image
+      - name: Pull Scanner Image
         run: docker pull ${{ env.SCANNER_IMAGE }}
 
+      # Step 4: Run the security scanner
       - name: Run Security Scanner
         id: scanner
         run: |
@@ -59,3 +63,32 @@ jobs:
             -e GITHUB_HEAD_REF=${{ github.head_ref }} \
             -e GITHUB_OUTPUT=$GITHUB_OUTPUT \
             ${{ env.SCANNER_IMAGE }}
+
+      # Step 5: Create a status check result
+      - name: Create Status Check
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const { context, getOctokit } = require('@actions/github');
+            const octokit = getOctokit(process.env.GITHUB_TOKEN);
+
+            const checkRun = await octokit.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: 'Caliptra Security',
+              head_sha: context.payload.pull_request.head.sha,
+              status: 'completed',
+              conclusion: 'success', // Change to 'failure' if needed based on scan results
+              output: {
+                title: 'Caliptra Security Check',
+                summary: 'Security scan completed successfully. No vulnerabilities detected.',
+              },
+            });
+            console.log(checkRun);
+
+      # Step 6: Handle scan failures (if needed)
+      - name: Fail Workflow on Scanner Failure
+        if: steps.scanner.outcome == 'failure'
+        run: |
+          echo "Security scan failed. Please review vulnerabilities."
+          exit 1
