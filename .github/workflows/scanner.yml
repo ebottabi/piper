@@ -1,10 +1,10 @@
-name: Caliptra Security Scan
+name: Caliptra Security Checks
 
 on:
   push:
-    branches: [main]
+    branches: [master]  # For merges and direct commits to main
   pull_request:
-    branches: [main]
+    branches: [master]  # For pull requests
   schedule:
     - cron: "0 0 * * *" # Daily scan
 
@@ -24,6 +24,10 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history
+          # Use PR SHA for pull requests, otherwise use the push SHA
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
       - name: Log in to the Container registry
         uses: docker/login-action@v3
@@ -35,17 +39,30 @@ jobs:
       - name: Pull scanner image
         run: docker pull ${{ env.SCANNER_IMAGE }}
 
+      - name: Debug GitHub context
+        run: |
+          echo "Event name: ${{ github.event_name }}"
+          echo "SHA: ${{ github.sha }}"
+          echo "PR number: ${{ github.event.pull_request.number }}"
+          echo "Repository: ${{ github.repository }}"
+          echo "Ref: ${{ github.ref }}"
+          echo "Base ref: ${{ github.base_ref }}"
+          echo "Head ref: ${{ github.head_ref }}"
+
       - name: Run Dependency Scanner
         id: scanner
         run: |
           docker run --rm \
             -v ${{ github.workspace }}:/code \
-            -e SCAN_PATH=${{ github.workspace }} \
+            -e SCAN_PATH=/code \
             -e INPUT_FAIL_ON_SEVERITY=true \
             -e GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} \
-            -e GITHUB_REF_NAME=${{ github.ref_name }} \
-            -e GITHUB_SHA=${{ github.sha }} \
+            -e GITHUB_REF=${{ github.ref }} \
+            -e GITHUB_SHA=${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }} \
             -e GITHUB_REPOSITORY=${{ github.repository }} \
             -e GITHUB_EVENT_NAME=${{ github.event_name }} \
+            -e GITHUB_PR_NUMBER=${{ github.event.pull_request.number }} \
+            -e GITHUB_BASE_REF=${{ github.base_ref }} \
+            -e GITHUB_HEAD_REF=${{ github.head_ref }} \
             -e GITHUB_OUTPUT=$GITHUB_OUTPUT \
             ${{ env.SCANNER_IMAGE }}
